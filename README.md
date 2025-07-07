@@ -1,0 +1,2 @@
+# BlockDAGHack
+AI wallet assistant
