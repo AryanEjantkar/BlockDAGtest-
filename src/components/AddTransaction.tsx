@@ -1,34 +1,113 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { ethers } from "ethers";
 
-export default function AddTransaction() {
+const AddTransaction = ({ chain }: { chain: "solana" | "ethereum" }) => {
+  // Shared state
+  const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
+  const [status, setStatus] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log({ amount, description });
+  // Solana hooks
+  const { publicKey, sendTransaction } = useWallet();
+  const { connection } = useConnection();
+
+  // Ethereum state
+  const [ethAccount, setEthAccount] = useState<string | null>(null);
+
+  // Fetch Ethereum account if on Ethereum chain
+  useEffect(() => {
+    if (chain === "ethereum" && window.ethereum) {
+      window.ethereum.request({ method: "eth_requestAccounts" }).then((accounts: string[]) => {
+        setEthAccount(accounts[0]);
+      });
+    }
+  }, [chain]);
+
+  const sendSolana = async () => {
+    if (!publicKey) {
+      setStatus("Connect your Solana wallet first.");
+      return;
+    }
+
+    try {
+      setStatus("Sending SOL...");
+      const recipientPubKey = new PublicKey(recipient);
+      const lamports = Math.floor(parseFloat(amount) * 1e9);
+
+      const transaction = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: publicKey,
+          toPubkey: recipientPubKey,
+          lamports,
+        })
+      );
+
+      const signature = await sendTransaction(transaction, connection);
+      await connection.confirmTransaction(signature, "confirmed");
+      setStatus(`SOL Transaction confirmed! Signature: ${signature}`);
+    } catch (error: any) {
+      setStatus("Error: " + error.message);
+    }
+  };
+
+  const sendEthereum = async () => {
+    if (!ethAccount || !recipient || !amount) {
+      setStatus("Missing input or MetaMask not connected");
+      return;
+    }
+
+    try {
+      setStatus("Sending ETH...");
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+
+      const tx = await signer.sendTransaction({
+        to: recipient,
+        value: ethers.parseEther(amount),
+      });
+
+      await tx.wait();
+      setStatus("ETH Transaction confirmed! Hash: " + tx.hash);
+    } catch (err: any) {
+      setStatus("Error: " + err.message);
+    }
+  };
+
+  const handleSend = () => {
+    if (chain === "solana") {
+      sendSolana();
+    } else if (chain === "ethereum") {
+      sendEthereum();
+    }
   };
 
   return (
-    <div>
-      <h2 className="text-xl font-bold mb-4">Add Transaction</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          type="number"
-          placeholder="Amount"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          className="p-2 border rounded w-full"
-        />
-        <input
-          type="text"
-          placeholder="Description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className="p-2 border rounded w-full"
-        />
-        <button type="submit" className="bg-green-500 text-white px-4 py-2 rounded">Add</button>
-      </form>
+    <div style={{ padding: 20, maxWidth: 400 }}>
+      <h2>Send {chain === "solana" ? "SOL" : "ETH"}</h2>
+      <input
+        type="text"
+        placeholder="Recipient Address"
+        value={recipient}
+        onChange={(e) => setRecipient(e.target.value)}
+        style={{ width: "100%", marginBottom: 10, padding: 8 }}
+      />
+      <input
+        type="number"
+        placeholder={`Amount in ${chain === "solana" ? "SOL" : "ETH"}`}
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        style={{ width: "100%", marginBottom: 10, padding: 8 }}
+        min="0"
+        step="0.0001"
+      />
+      <button onClick={handleSend} style={{ width: "100%", padding: 10 }}>
+        Send {chain === "solana" ? "SOL" : "ETH"}
+      </button>
+      {status && <p style={{ marginTop: 10 }}>{status}</p>}
     </div>
   );
-}
+};
+
+export default AddTransaction;
