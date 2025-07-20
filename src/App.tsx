@@ -5,7 +5,7 @@ import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react
 import { WalletModalProvider, WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-wallets";
 import { clusterApiUrl } from "@solana/web3.js";
-import WalletSend from "./walletsend";
+import WalletSend from "./Walletsend";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
