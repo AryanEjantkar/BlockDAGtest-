@@ -1,8 +1,27 @@
-export default function handler(req: any, res: any) {
+import type { IncomingMessage, ServerResponse } from 'http';
+
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
   if (req.method === 'POST') {
-    const data = req.body;
-    res.status(200).json({ message: 'Hello from grok API', received: data });
+    let body = '';
+
+    req.on('data', (chunk: Buffer) => {
+      body += chunk.toString();
+    });
+
+    req.on('end', () => {
+      try {
+        const parsed = JSON.parse(body);
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ message: 'Hello from Grok API', received: parsed }));
+      } catch (error) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Invalid JSON' }));
+      }
+    });
   } else {
-    res.status(405).json({ error: 'Method not allowed' });
+    res.statusCode = 405;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: 'Method not allowed' }));
   }
 }
