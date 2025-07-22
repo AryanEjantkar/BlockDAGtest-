@@ -1,169 +1,134 @@
-import React, { useState, useCallback } from "react";
-import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
-import { BrowserProvider, parseEther } from "ethers";
-import type { JsonRpcSigner } from "ethers";
+import React, { useState } from "react";
+import { ethers } from "ethers";
+import {
+  Connection,
+  PublicKey,
+  clusterApiUrl,
+  Transaction,
+  SystemProgram,
+  LAMPORTS_PER_SOL,
+} from "@solana/web3.js";
 
 declare global {
   interface Window {
     ethereum?: any;
+    phantom?: {
+      solana?: any;
+    };
   }
 }
 
-const WalletSend = () => {
-  const { connection } = useConnection();
-  const {
-    publicKey: solPublicKey,
-    sendTransaction,
-    connected: solConnected,
-    select,
-  } = useWallet();
+interface WalletSendProps {
+  walletAddress: string;
+  walletType: "metamask" | "phantom" | "rabby" | null;
+  setStatus?: React.Dispatch<React.SetStateAction<string>>;
+}
 
-  const [ethProvider, setEthProvider] = useState<BrowserProvider | null>(null);
-  const [ethSigner, setEthSigner] = useState<JsonRpcSigner | null>(null);
-  const [ethConnected, setEthConnected] = useState(false);
-  const [ethAccount, setEthAccount] = useState<string | null>(null);
-
-  const [walletType, setWalletType] = useState<"ethereum" | "solana" | null>(null);
+const WalletSend: React.FC<WalletSendProps> = ({
+  walletAddress,
+  walletType,
+  setStatus,
+}) => {
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
-  const [status, setStatus] = useState<string | null>(null);
 
-  const connectEthereum = async () => {
-    if (!window.ethereum) return alert("MetaMask not found");
+  const sendTransaction = async () => {
+    if (!walletAddress || !walletType) {
+      setStatus && setStatus("Please connect your wallet first.");
+      return;
+    }
+    if (!recipient || !amount) {
+      setStatus && setStatus("Please enter recipient address and amount.");
+      return;
+    }
+
+    setStatus && setStatus("Sending transaction...");
 
     try {
-      const provider = new BrowserProvider(window.ethereum);
-      await window.ethereum.request({ method: "eth_requestAccounts" });
-      const signer = await provider.getSigner();
-      const address = await signer.getAddress();
+      if (walletType === "metamask" || walletType === "rabby") {
+        if (!window.ethereum) {
+          setStatus && setStatus("Ethereum wallet not detected.");
+          return;
+        }
 
-      setEthProvider(provider);
-      setEthSigner(signer);
-      setEthConnected(true);
-      setEthAccount(address);
-      setWalletType("ethereum");
-      setStatus(`✅ Ethereum connected: ${address}`);
-    } catch (err: any) {
-      setStatus("Ethereum connection error: " + err.message);
+        await window.ethereum.request({ method: "eth_requestAccounts" });
+
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+
+        const tx = await signer.sendTransaction({
+          to: recipient,
+          value: ethers.parseEther(amount),
+        });
+
+        setStatus && setStatus(`Transaction sent! Hash: ${tx.hash}`);
+
+        const receipt = await tx.wait();
+        if (receipt) {
+          setStatus && setStatus(`Transaction confirmed! Hash: ${receipt.hash}`);
+        } else {
+          setStatus && setStatus("Transaction sent, but no confirmation received.");
+        }
+      } else if (walletType === "phantom") {
+        const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
+        const fromPubkey = new PublicKey(walletAddress);
+        const toPubkey = new PublicKey(recipient);
+
+        const transaction = new Transaction().add(
+          SystemProgram.transfer({
+            fromPubkey,
+            toPubkey,
+            lamports: Math.floor(parseFloat(amount) * LAMPORTS_PER_SOL),
+          })
+        );
+
+        transaction.feePayer = fromPubkey;
+        const { blockhash } = await connection.getLatestBlockhash("finalized");
+        transaction.recentBlockhash = blockhash;
+
+        if (
+          window.phantom?.solana?.signTransaction &&
+          typeof window.phantom.solana.signTransaction === "function"
+        ) {
+          const signed = await window.phantom.solana.signTransaction(transaction);
+          const sig = await connection.sendRawTransaction(signed.serialize());
+          await connection.confirmTransaction(sig, "confirmed");
+          setStatus && setStatus(`Transaction confirmed! Signature: ${sig}`);
+        } else {
+          setStatus && setStatus("Phantom wallet not available or unable to sign.");
+        }
+      } else {
+        setStatus && setStatus("Unsupported wallet type.");
+      }
+    } catch (error: any) {
+      setStatus && setStatus(`Transaction failed: ${error.message || error}`);
     }
   };
-
-  const connectSolana = () => {
-    select("Phantom" as any);
-    setWalletType("solana");
-    setStatus("✅ Solana wallet selected (Phantom)");
-  };
-
-  const connectWallet = async () => {
-    const choice = window.prompt("Type 'eth' to connect Ethereum or 'sol' for Solana:");
-    if (choice === "eth") await connectEthereum();
-    else if (choice === "sol") connectSolana();
-    else alert("Invalid choice. Please type 'eth' or 'sol'.");
-  };
-
-  const sendSolana = useCallback(async () => {
-    if (!solConnected || !solPublicKey) return setStatus("Please connect your Solana wallet.");
-    if (!recipient || !amount) return setStatus("Please enter recipient and amount.");
-    if (!sendTransaction) return setStatus("sendTransaction function not available.");
-
-    try {
-      const lamports = Math.floor(parseFloat(amount) * 1e9);
-      const tx = new Transaction().add(
-        SystemProgram.transfer({
-          fromPubkey: solPublicKey,
-          toPubkey: new PublicKey(recipient),
-          lamports,
-        })
-      );
-      const signature = await sendTransaction(tx, connection);
-      setStatus("Waiting for confirmation...");
-      await connection.confirmTransaction(signature, "confirmed");
-      setStatus(`✅ SOL sent! Signature: ${signature}`);
-    } catch (err: any) {
-      setStatus("Solana send error: " + err.message);
-    }
-  }, [solConnected, solPublicKey, recipient, amount, sendTransaction, connection]);
-
-  const sendEthereum = useCallback(async () => {
-    if (!ethSigner) return setStatus("Please connect your Ethereum wallet.");
-    if (!recipient || !amount) return setStatus("Please enter recipient and amount.");
-
-    try {
-      const tx = await ethSigner.sendTransaction({
-        to: recipient,
-        value: parseEther(amount),
-      });
-      setStatus("Waiting for Ethereum confirmation...");
-      await tx.wait();
-      setStatus(`✅ ETH sent! Tx Hash: ${tx.hash}`);
-    } catch (err: any) {
-      setStatus("Ethereum send error: " + err.message);
-    }
-  }, [ethSigner, recipient, amount]);
-
-  const handleSend = async () => {
-    if (walletType === "solana") await sendSolana();
-    else if (walletType === "ethereum") await sendEthereum();
-    else setStatus("Please connect a wallet first.");
-  };
-
-  const cryptoTips = [
-    "✅ Use hardware wallets like Ledger or Trezor for large amounts.",
-    "📊 Track your portfolio with apps like Zapper or DeBank.",
-    "🔐 Always verify dApp URLs and avoid phishing links.",
-    "🧠 Use separate wallets for testing, trading, and holding.",
-    "⏳ Don't FOMO: Buy in parts, especially during volatility.",
-    "🎯 Always check gas fees before sending ETH.",
-  ];
 
   return (
-    <div className="w-full bg-zinc-900 p-6 rounded-lg text-white shadow-xl">
-      <h2 className="text-center text-2xl font-bold mb-4">My Crypto Wallet</h2>
-
-      <button
-        onClick={connectWallet}
-        className="w-full mb-4 bg-blue-600 hover:bg-blue-500 py-2 rounded font-semibold"
-      >
-        {walletType ? `Connected: ${walletType.toUpperCase()}` : "Connect Wallet"}
-      </button>
-
+    <div className="flex flex-col space-y-4 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md max-w-md mx-auto">
       <input
         type="text"
         placeholder="Recipient Address"
         value={recipient}
         onChange={(e) => setRecipient(e.target.value)}
-        className="w-full mb-3 px-4 py-2 bg-zinc-800 border border-zinc-700 rounded"
+        className="w-full px-4 py-2 border rounded-md dark:bg-gray-700 dark:text-white dark:border-gray-600"
       />
       <input
         type="number"
         placeholder="Amount"
         min="0"
-        step="0.0001"
+        step="any"
         value={amount}
         onChange={(e) => setAmount(e.target.value)}
-        className="w-full mb-4 px-4 py-2 bg-zinc-800 border border-zinc-700 rounded"
+        className="w-full px-4 py-2 border rounded-md dark:bg-gray-700 dark:text-white dark:border-gray-600"
       />
-
       <button
-        onClick={handleSend}
-        className="w-full bg-emerald-600 hover:bg-emerald-500 py-2 rounded font-semibold"
+        onClick={sendTransaction}
+        className="bg-green-600 hover:bg-green-700 text-white py-2 rounded-md font-semibold"
       >
         Send
       </button>
-
-      {status && (
-        <p className="mt-4 text-center text-sm break-words text-gray-300">{status}</p>
-      )}
-
-      <div className="mt-8 p-4 bg-zinc-800 rounded">
-        <h3 className="text-lg font-semibold mb-2">🤖 AI Crypto Assistant Tips</h3>
-        <ul className="list-disc pl-5 space-y-1 text-sm text-zinc-300">
-          {cryptoTips.map((tip, i) => (
-            <li key={i}>{tip}</li>
-          ))}
-        </ul>
-      </div>
     </div>
   );
 };
