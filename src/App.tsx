@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import WalletSend from "./Walletsend";
 import { Moon, Sun } from "lucide-react";
 
-// Connect wallet logic
 declare global {
   interface Window {
     ethereum?: any;
@@ -13,9 +12,11 @@ declare global {
 const App: React.FC = () => {
   const [walletAddress, setWalletAddress] = useState<string>("");
   const [walletType, setWalletType] = useState<"metamask" | "phantom" | null>(null);
+  const [selectedWallet, setSelectedWallet] = useState<"metamask" | "phantom" | null>(null);
   const [status, setStatus] = useState<string>("");
   const [response, setResponse] = useState<string>("");
   const [darkMode, setDarkMode] = useState<boolean>(true);
+  const [isConnecting, setIsConnecting] = useState<boolean>(false);
 
   const toggleDarkMode = () => setDarkMode(!darkMode);
 
@@ -24,24 +25,46 @@ const App: React.FC = () => {
   }, [darkMode]);
 
   const connectWallet = async () => {
+    if (isConnecting || walletAddress) {
+      setStatus(walletAddress ? "Wallet already connected" : "Already connecting...");
+      return;
+    }
+
+    if (!selectedWallet) {
+      alert("Please select a wallet to connect.");
+      return;
+    }
+
+    setIsConnecting(true);
+
     try {
-      if (window.ethereum) {
+      if (selectedWallet === "metamask" && window.ethereum?.isMetaMask) {
         const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
         setWalletAddress(accounts[0]);
         setWalletType("metamask");
         setStatus("Connected to MetaMask");
-      } else if (window.phantom?.solana) {
+      } else if (selectedWallet === "phantom" && window.phantom?.solana) {
         const resp = await window.phantom.solana.connect();
         setWalletAddress(resp.publicKey.toString());
         setWalletType("phantom");
         setStatus("Connected to Phantom");
       } else {
-        alert("No compatible wallet found.");
+        alert(`Selected wallet (${selectedWallet}) is not available.`);
+        setStatus("Wallet not found");
       }
     } catch (error) {
       console.error("Wallet connection failed:", error);
       setStatus("Connection failed");
+    } finally {
+      setIsConnecting(false);
     }
+  };
+
+  const disconnectWallet = () => {
+    setWalletAddress("");
+    setWalletType(null);
+    setSelectedWallet(null);
+    setStatus("Disconnected");
   };
 
   const askGrokAssistant = async () => {
@@ -68,25 +91,23 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 transition-colors px-4">
       <div className="p-6 rounded-2xl shadow-2xl bg-gray-100 dark:bg-gray-800 w-full max-w-md text-center">
-        
+
         {/* App Logo and Name */}
         <div className="mb-6 flex flex-col items-center space-y-2">
-          {/* Replace the src with your actual logo path */}
           <img
-  src="/assets/logo-1_imresizer.png"
-  alt="Kryptanator Logo"
-  className="w-16 h-16 object-contain mx-auto"
-/>
-
+            src="/assets/logo-1_imresizer.png"
+            alt="Kryptanator Logo"
+            className="w-16 h-16 object-contain mx-auto"
+          />
           <h1
             className="text-3xl font-bold text-gray-900 dark:text-white"
-            style={{ fontFamily: "'Reesha', cursive" }} // Use your custom font if available
+            style={{ fontFamily: "'Reesha', cursive" }}
           >
             Kryptanator
           </h1>
         </div>
 
-        {/* Dark mode toggle and Connect Wallet */}
+        {/* Dark mode toggle and Disconnect */}
         <div className="flex justify-between items-center mb-4">
           <button
             onClick={toggleDarkMode}
@@ -95,13 +116,47 @@ const App: React.FC = () => {
           >
             {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
+
+          {walletAddress ? (
+            <button
+              onClick={disconnectWallet}
+              className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl"
+            >
+              Disconnect
+            </button>
+          ) : null}
+        </div>
+
+        {/* Wallet Selection Dropdown */}
+        {!walletAddress && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+              Select Wallet:
+            </label>
+            <select
+              value={selectedWallet ?? ""}
+              onChange={(e) => setSelectedWallet(e.target.value as "metamask" | "phantom")}
+              className="w-full p-2 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white"
+            >
+              <option value="" disabled>
+                Select a wallet
+              </option>
+              <option value="metamask">MetaMask (Ethereum)</option>
+              <option value="phantom">Phantom (Solana)</option>
+            </select>
+          </div>
+        )}
+
+        {/* Connect Wallet Button */}
+        {!walletAddress && (
           <button
             onClick={connectWallet}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-xl"
+            disabled={isConnecting}
+            className="mb-4 w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-xl disabled:opacity-50"
           >
-            Connect Wallet
+            {isConnecting ? "Connecting..." : "Connect Wallet"}
           </button>
-        </div>
+        )}
 
         {/* Wallet Info */}
         <div className="text-sm text-gray-600 dark:text-gray-300 mb-2">
