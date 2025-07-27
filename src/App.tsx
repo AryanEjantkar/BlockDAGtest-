@@ -67,10 +67,10 @@ const App: React.FC = () => {
     setStatus("Disconnected");
   };
 
-  const askGrokAssistant = async () => {
+  const askTogetherAssistant = async () => {
     setStatus("Asking Assistant...");
     try {
-      const res = await fetch("/api/grok", {
+      const res = await fetch("/api/askAI", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -80,11 +80,11 @@ const App: React.FC = () => {
         }),
       });
       const data = await res.json();
-      setResponse(data.message || "No response from Grok.");
+      setResponse(data.message || "No response from AI.");
       setStatus("Response received");
     } catch (error) {
-      console.error("Error calling Grok:", error);
-      setStatus("Grok call failed");
+      console.error("Error calling Together AI:", error);
+      setStatus("AI call failed");
     }
   };
 
@@ -92,7 +92,6 @@ const App: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 transition-colors px-4">
       <div className="p-6 rounded-2xl shadow-2xl bg-gray-100 dark:bg-gray-800 w-full max-w-md text-center">
 
-        {/* App Logo and Name */}
         <div className="mb-6 flex flex-col items-center space-y-2">
           <img
             src="/assets/logo-1_imresizer.png"
@@ -107,7 +106,6 @@ const App: React.FC = () => {
           </h1>
         </div>
 
-        {/* Dark mode toggle and Disconnect */}
         <div className="flex justify-between items-center mb-4">
           <button
             onClick={toggleDarkMode}
@@ -127,7 +125,6 @@ const App: React.FC = () => {
           ) : null}
         </div>
 
-        {/* Wallet Selection Dropdown */}
         {!walletAddress && (
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
@@ -147,7 +144,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Connect Wallet Button */}
         {!walletAddress && (
           <button
             onClick={connectWallet}
@@ -158,24 +154,20 @@ const App: React.FC = () => {
           </button>
         )}
 
-        {/* Wallet Info */}
         <div className="text-sm text-gray-600 dark:text-gray-300 mb-2">
           {walletAddress ? `Connected: ${walletAddress.slice(0, 8)}...` : "Wallet not connected"}
         </div>
         <div className="text-xs text-gray-500 dark:text-gray-400 mb-4">{status}</div>
 
-        {/* Send Section */}
         <WalletSend walletAddress={walletAddress} walletType={walletType} setStatus={setStatus} />
 
-        {/* Assistant Button */}
         <button
-          onClick={askGrokAssistant}
+          onClick={askTogetherAssistant}
           className="mt-6 w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold px-4 py-2 rounded-xl"
         >
           Ask Assistant
         </button>
 
-        {/* Assistant Response */}
         {response && (
           <div className="mt-4 p-3 bg-purple-100 dark:bg-purple-900 text-sm text-purple-800 dark:text-purple-200 rounded-xl">
             {response}

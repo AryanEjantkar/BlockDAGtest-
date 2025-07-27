@@ -7,22 +7,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { question } = req.body;
-
   if (!question) {
     return res.status(400).json({ error: 'Missing question' });
   }
 
   try {
-    const response = await fetch('https://api.x.ai/v1/chat/completions', {
+    const apiRes = await fetch('https://api.together.xyz/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.GROK_API_KEY}`, // your backend env var
+        Authorization: `Bearer ${process.env.TOGETHER_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'grok-lite',  // free tier model
+        model: 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
         messages: [
-          { role: 'system', content: 'You are a helpful assistant specialized in crypto investment advice.' },
+          { role: 'system', content: 'You are a crypto investment assistant.' },
           { role: 'user', content: question },
         ],
         max_tokens: 300,
@@ -30,17 +29,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }),
     });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(response.status).json({ error: data.error || 'Grok API error' });
+    const data = await apiRes.json();
+    if (!apiRes.ok) {
+      console.error('Together API error:', data);
+      return res.status(apiRes.status).json({ error: data.error || 'Together.ai error' });
     }
 
-    const aiResponse = data.choices?.[0]?.message?.content || 'No response from Grok.';
-
+    const aiResponse = data.choices?.[0]?.message?.content ?? 'No response.';
     return res.status(200).json({ message: aiResponse });
-  } catch (error) {
-    console.error('Grok API error:', error);
-    return res.status(500).json({ error: 'Failed to get response from Grok' });
+  } catch (err) {
+    console.error('API error:', err);
+    return res.status(500).json({ error: 'Failed to connect to Together.ai' });
   }
 }
