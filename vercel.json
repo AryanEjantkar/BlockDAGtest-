@@ -2,14 +2,14 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/Askai.ts",
+      "src": "api/askAI.ts",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
-      "src": "/api/Askai",
-      "dest": "api/Askai.ts"
+      "src": "/api/askAI",
+      "dest": "api/askAI.ts"
     }
   ]
 }
