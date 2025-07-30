@@ -8,8 +8,8 @@
   ],
   "routes": [
     {
-      "src": "/api/askAI",
-      "dest": "api/askAI.ts"
+      "src": "/api/Askai",
+      "dest": "api/Askai.ts"
     }
   ]
 }
